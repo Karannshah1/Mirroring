@@ -5,38 +5,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Dependencies
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      
+      - name: Install
         run: npm install --legacy-peer-deps
 
-      - name: Capacitor Fresh Build
+      - name: Capacitor Sync
         run: |
           mkdir -p www
           cp index.html www/
-          # FORCE REBUILD: This ensures the new server.url is actually written
           rm -rf android
           npx cap add android
+          # Ensure Browser plugin is installed before sync
+          npm install @capacitor/browser --legacy-peer-deps
           npx cap sync
 
-      - name: Patch SDK Version
+      - name: Patch SDK
         run: |
           sed -i 's/minSdkVersion = 22/minSdkVersion = 23/g' android/variables.gradle
           sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/app/build.gradle || true
 
-      - name: Build APK
+      - name: Build
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK Artifact
+      - name: Upload
         uses: actions/upload-artifact@v7
         with:
           name: WebMirror-APK
