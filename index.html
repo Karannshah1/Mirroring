@@ -7,42 +7,40 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --accent: #0ea5e9; --bg: #020617; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
-        #remote-video { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: contain; z-index: 1; display: none; background: #000; }
-        .ui { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
-        .card { background: #1e293b; padding: 30px; border-radius: 24px; width: 85%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-        input { width: 100%; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 15px; text-align: center; box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: var(--bg); color: white; font-family: sans-serif; }
+        .ui { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .card { background: #1e293b; padding: 2rem; border-radius: 24px; width: 85%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        #remote-video { position: fixed; top:0; left:0; width:100vw; height:100vh; object-fit:contain; background:#000; display:none; z-index:100; }
+        input { width: 100%; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; margin: 15px 0; text-align: center; }
         button { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
-
+    <video id="remote-video" autoplay playsinline></video>
     <div id="setup-ui" class="ui">
         <div class="card">
             <h1>WebMirror Pro</h1>
-            <div id="my-id" style="color:var(--accent); font-weight:bold; margin-bottom:20px; font-family:monospace;">Generating ID...</div>
-            <input type="text" id="remote-id" placeholder="Enter Laptop ID">
-            <button onclick="startMirroring()">Connect & Stream</button>
+            <div id="my-id" style="color:var(--accent); font-family:monospace; margin-bottom:10px;">ID: ...</div>
+            <input type="text" id="remote-id" placeholder="Paste Laptop ID">
+            <button onclick="startMirroring()">Connect & Start Mirror</button>
             <p id="status" style="font-size:0.8rem; color:#94a3b8; margin-top:10px;">Ready</p>
         </div>
     </div>
-
-    <video id="remote-video" autoplay playsinline></video>
 
     <script>
         const peer = new Peer();
         const statusEl = document.getElementById('status');
 
-        peer.on('open', id => document.getElementById('my-id').innerText = id);
+        peer.on('open', id => document.getElementById('my-id').innerText = "Your ID: " + id);
 
         // RECEIVER (Laptop)
         peer.on('call', call => {
             call.answer();
             call.on('stream', stream => {
                 document.getElementById('setup-ui').style.display = "none";
-                const video = document.getElementById('remote-video');
-                video.style.display = "block";
-                video.srcObject = stream;
+                const v = document.getElementById('remote-video');
+                v.style.display = "block";
+                v.srcObject = stream;
             });
         });
 
@@ -51,19 +49,21 @@
             const targetId = document.getElementById('remote-id').value;
             if(!targetId) return alert("Enter ID");
 
-            // CHECK: Is getDisplayMedia missing? (This happens in WebViews)
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                // If in Native App, open the URL in a Full Chrome Custom Tab
-                if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-                    statusEl.innerText = "Unlocking Mirroring Mode...";
-                    const { Browser } = Capacitor.Plugins;
-                    // RE-OPEN THE SAME URL IN FULL CHROME CONTEXT
-                    await Browser.open({ url: window.location.href });
-                    return;
-                } else {
-                    alert("Mirroring not supported in this browser window.");
-                    return;
-                }
+            // 1. Detect restricted WebView
+            const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+            const hasDisplayMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+            if (isNative && !hasDisplayMedia) {
+                statusEl.innerText = "Bypassing Sandbox... Please wait.";
+                // ACTION: This forces the OS to open the site in the FULL Chrome Browser
+                const { Browser } = Capacitor.Plugins;
+                await Browser.open({ url: window.location.href });
+                return;
+            }
+
+            // 2. Trigger Native Permission (to ensure OS doesn't kill us)
+            if (isNative) {
+                try { await Capacitor.Plugins.ScreenRecorder.start(); } catch(e) {}
             }
 
             try {
@@ -71,7 +71,7 @@
                 peer.call(targetId, stream);
                 statusEl.innerText = "Mirroring Active!";
             } catch (err) {
-                alert("Error: " + err.message);
+                alert("Capture Failed. Ensure you are in Chrome or Firefox.");
             }
         }
     </script>
