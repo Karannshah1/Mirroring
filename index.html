@@ -2,58 +2,109 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quick Mirror</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WebMirror Pro | Fullscreen</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding: 20px; }
-        video { width: 90%; max-width: 800px; border: 2px solid #333; border-radius: 8px; margin-top: 20px; }
-        .controls { margin-bottom: 20px; }
-        button { padding: 10px 20px; cursor: pointer; background: #007bff; border: none; color: white; border-radius: 5px; }
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f1f5f9; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: var(--bg); font-family: sans-serif; color: var(--text); }
+        
+        /* Video fills the entire window */
+        #remote-video {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: #000; object-fit: contain;
+            z-index: 1; display: none;
+        }
+
+        .overlay {
+            position: relative; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; width: 100%; background: rgba(15, 23, 42, 0.9);
+        }
+
+        .container {
+            background: var(--card); padding: 2.5rem; border-radius: 20px;
+            width: 90%; max-width: 400px; text-align: center;
+        }
+
+        input {
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+            background: #0f172a; color: white; margin-bottom: 15px; box-sizing: border-box;
+        }
+
+        button {
+            background: var(--accent); color: #0f172a; border: none;
+            padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;
+        }
+
+        #exit-btn {
+            position: fixed; top: 20px; right: 20px; z-index: 20;
+            background: rgba(255,255,255,0.2); color: white; border: none;
+            padding: 8px 15px; border-radius: 5px; display: none; cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <h1>Web Mirror</h1>
-    <div class="controls">
-        <p id="my-id">Initializing...</p>
-        <input type="text" id="remote-id" placeholder="Enter Laptop ID (on mobile)">
-        <button onclick="startMirroring()">Start Mirroring</button>
+
+    <button id="exit-btn" onclick="location.reload()">Stop Mirroring</button>
+
+    <div id="ui-overlay" class="overlay">
+        <div class="container">
+            <h1 style="color:var(--accent)">WebMirror Pro</h1>
+            <p id="status">Ready</p>
+            <div style="background:#0f172a; padding:10px; border-radius:8px; margin-bottom:20px;">
+                <small style="color:#94a3b8">LAPTOP ID</small><br>
+                <strong id="my-id" style="font-size:1.2rem; cursor:pointer">Loading...</strong>
+            </div>
+            <input type="text" id="remote-id" placeholder="Enter Laptop ID here">
+            <button onclick="startProMirror()">Connect & Stream</button>
+        </div>
     </div>
+
     <video id="remote-video" autoplay playsinline></video>
 
     <script>
         const peer = new Peer();
-        let myIdDisplay = document.getElementById('my-id');
-        let remoteVideo = document.getElementById('remote-video');
+        const myIdEl = document.getElementById('my-id');
+        const remoteVideo = document.getElementById('remote-video');
+        const uiOverlay = document.getElementById('ui-overlay');
 
-        peer.on('open', (id) => {
-            myIdDisplay.innerText = "Your ID: " + id;
-        });
+        peer.on('open', id => myIdEl.innerText = id);
 
-        // RECEIVER LOGIC (Laptop)
-        peer.on('call', (call) => {
-            call.answer(); 
-            call.on('stream', (remoteStream) => {
-                remoteVideo.srcObject = remoteStream;
+        // Receive Stream (Laptop)
+        peer.on('call', call => {
+            call.answer();
+            call.on('stream', stream => {
+                remoteVideo.srcObject = stream;
+                remoteVideo.style.display = "block";
+                uiOverlay.style.display = "none";
+                document.getElementById('exit-btn').style.display = "block";
             });
         });
 
-        // SENDER LOGIC (Mobile)
-        async function startMirroring() {
+        async function startProMirror() {
             const targetId = document.getElementById('remote-id').value;
-            if (!targetId) return alert("Enter the Laptop's ID first!");
+            if(!targetId) return alert("Enter ID");
 
+            // Hacks for background stability
             try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: "always" },
-                    audio: false
-                });
-                peer.call(targetId, stream);
-            } catch (err) {
-                console.error("Error accessing screen: ", err);
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain(); gain.gain.value = 0;
+                osc.connect(gain); gain.connect(ctx.destination); osc.start();
+                if('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+            } catch(e) {}
+
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            } catch(e) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             }
+            
+            if(stream) peer.call(targetId, stream);
         }
     </script>
 </body>
 </html>
-
