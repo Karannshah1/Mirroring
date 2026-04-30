@@ -1,10 +1,9 @@
-
 {
   "appId": "com.karan.mirror",
   "appName": "WebMirror",
   "webDir": "www",
   "server": {
-    "url": "https://mirroing-murex.vercel.app",
+    "url": "https://mirroring-murex.vercel.app",
     "cleartext": true
   }
 }
