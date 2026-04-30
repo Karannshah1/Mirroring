@@ -6,25 +6,50 @@
     <title>WebMirror Pro | Universal</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --accent: #0ea5e9; --bg: #020617; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
-        #remote-video { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: contain; z-index: 1; display: none; background: #000; }
-        .ui { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--bg); padding: 20px; text-align: center; }
-        .card { background: #1e293b; padding: 30px; border-radius: 24px; width: 100%; max-width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
-        .id-badge { background: #0f172a; border: 1px solid var(--accent); padding: 15px; border-radius: 12px; margin: 20px 0; font-family: monospace; font-size: 1.2rem; color: var(--accent); cursor: pointer; }
-        input { width: 100%; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 15px; box-sizing: border-box; text-align: center; }
-        button { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; }
+        :root { --accent: #0ea5e9; --bg: #020617; --card: #1e293b; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; color: white; }
+        
+        /* The Mirroring Window: Full Screen for Laptop */
+        #remote-video {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            object-fit: contain; z-index: 1;
+            display: none; background: #000;
+        }
+
+        .ui-layer { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: var(--bg); padding: 20px; text-align: center; transition: opacity 0.3s; }
+        .card { background: var(--card); padding: 2rem; border-radius: 24px; width: 100%; max-width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+        
+        .id-container { background: #0f172a; border: 1px solid var(--accent); padding: 15px; border-radius: 12px; margin: 20px 0; cursor: pointer; }
+        .id-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .id-value { font-family: monospace; font-size: 1.3rem; color: var(--accent); font-weight: bold; margin-top: 5px; }
+        
+        input { width: 100%; padding: 15px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 15px; box-sizing: border-box; text-align: center; font-size: 1rem; }
+        button { background: var(--accent); color: white; border: none; padding: 16px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; transition: transform 0.1s; }
+        button:active { transform: scale(0.98); }
+        
+        #status { font-size: 0.85rem; color: #94a3b8; margin-top: 15px; }
+        #stop-btn { position: fixed; top: 20px; right: 20px; z-index: 20; background: rgba(239, 68, 68, 0.8); color: white; padding: 10px 20px; border-radius: 8px; border: none; display: none; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="setup-ui" class="ui">
+    <button id="stop-btn" onclick="location.reload()">Stop Stream</button>
+
+    <div id="setup-ui" class="ui-layer">
         <div class="card">
-            <h1>WebMirror Pro</h1>
-            <div class="id-badge" id="my-id" onclick="copyId()">Generating ID...</div>
-            <input type="text" id="remote-id" placeholder="Enter Receiver ID">
-            <button onclick="startUniversalMirror()">Connect & Stream</button>
-            <p id="status" style="font-size: 0.8rem; color: #94a3b8; margin-top: 15px;">Ready</p>
+            <h1 style="margin:0 0 5px 0; font-size: 1.5rem;">WebMirror Pro</h1>
+            <p style="color:#94a3b8; font-size: 0.9rem; margin-bottom: 20px;">Universal P2P Mirroring</p>
+            
+            <div class="id-container" onclick="copyId()">
+                <div class="id-label">Target ID (Laptop)</div>
+                <div id="my-id" class="id-value">Initialising...</div>
+                <small style="color:#475569">Tap to copy</small>
+            </div>
+
+            <input type="text" id="remote-id" placeholder="Paste Laptop ID here">
+            <button onclick="startMirroring()">Connect & Stream</button>
+            <p id="status">Ready for connection</p>
         </div>
     </div>
 
@@ -35,49 +60,89 @@
         const videoEl = document.getElementById('remote-video');
         const uiEl = document.getElementById('setup-ui');
         const statusEl = document.getElementById('status');
+        const myIdEl = document.getElementById('my-id');
+        const stopBtn = document.getElementById('stop-btn');
 
-        peer.on('open', id => document.getElementById('my-id').innerText = id);
+        peer.on('open', id => myIdEl.innerText = id);
 
-        // RECEIVER (Laptop Window)
+        // --- RECEIVER LOGIC (Laptop) ---
         peer.on('call', call => {
+            statusEl.innerText = "Incoming stream...";
             call.answer();
             call.on('stream', stream => {
                 uiEl.style.display = "none";
                 videoEl.style.display = "block";
+                stopBtn.style.display = "block";
                 videoEl.srcObject = stream;
             });
         });
 
-        async function startUniversalMirror() {
+        // --- SENDER LOGIC (Phone/App) ---
+        async function startMirroring() {
             const targetId = document.getElementById('remote-id').value;
-            if(!targetId) return alert("Enter ID");
+            if(!targetId) return alert("Please enter the ID shown on your laptop!");
+
+            statusEl.innerText = "Requesting screen access...";
+            
+            // Stay-alive Hacks
+            triggerKeepAlive();
 
             let stream;
             try {
-                // 1. NATIVE APP LOGIC (Phone)
-                if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-                    statusEl.innerText = "Requesting Native Screen Access...";
-                    // Using the Screen Recorder Plugin for system-wide capture
-                    const { ScreenRecorder } = Capacitor.Plugins;
-                    const result = await ScreenRecorder.start(); 
-                    stream = result.stream;
-                } 
-                // 2. WEB BROWSER LOGIC (Laptop)
-                else {
-                    statusEl.innerText = "Requesting Browser Screen Access...";
-                    stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                // Environment Detection
+                const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+                
+                if (isNative) {
+                    // 1. NATIVE MODE: Using Capacitor Plugin for system-wide capture
+                    console.log("Using Native Screen Capture");
+                    // In many configurations, getDisplayMedia works inside Capacitor if permissions are in Manifest
+                    stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { cursor: "always" },
+                        audio: false
+                    });
+                } else {
+                    // 2. WEB MODE: Using Standard Browser API
+                    console.log("Using Browser Screen Capture");
+                    stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: true,
+                        audio: false
+                    });
                 }
 
-                peer.call(targetId, stream);
+                if (stream) {
+                    statusEl.innerText = "Mirroring Active!";
+                    peer.call(targetId, stream);
+                    uiEl.style.opacity = "0.6"; // Dim UI to show it's working
+                }
             } catch (err) {
-                alert("Error: " + err.message);
+                console.error(err);
+                statusEl.innerText = "Error: " + err.message;
+                alert("Capture Failed: " + err.message);
             }
         }
 
+        // --- UTILS ---
+        function triggerKeepAlive() {
+            try {
+                // Silent Audio Hack
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain(); g.gain.value = 0;
+                osc.connect(g); g.connect(ctx.destination); osc.start();
+                // Wake Lock Hack
+                if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
+            } catch(e) {}
+        }
+
         function copyId() {
-            navigator.clipboard.writeText(document.getElementById('my-id').innerText);
+            navigator.clipboard.writeText(myIdEl.innerText);
             alert("ID Copied!");
         }
+
+        peer.on('error', err => {
+            console.error(err);
+            statusEl.innerText = "Peer Error: " + err.type;
+        });
     </script>
 </body>
 </html>
