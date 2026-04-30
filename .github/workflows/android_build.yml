@@ -1,20 +1,41 @@
 name: Build Android APK
 on: [push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm install
-      - run: npx cap add android
-      - run: npx cap sync
-      - name: Build APK
+      # 1. Pull the code from your repository
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # 2. Set up the Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3. Install dependencies with the legacy-peer-deps flag
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      # 4. Add and Sync the Android platform
+      # Note: This creates the android folder on the fly if it's missing
+      - name: Capacitor Sync
         run: |
-          cd android && ./gradlew assembleDebug
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+          npx cap add android || true
+          npx cap sync
+
+      # 5. Compile the Java/Kotlin code into an APK
+      - name: Build with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # 6. Upload the final APK so you can download it to your phone
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v7
         with:
           name: WebMirror-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
