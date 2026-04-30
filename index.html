@@ -3,108 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebMirror Pro | Fullscreen</title>
+    <title>WebMirror Pro | Ultra-Fast Screen Share</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f1f5f9; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: var(--bg); font-family: sans-serif; color: var(--text); }
+        :root { --accent: #00d2ff; --bg: #0f172a; --panel: #1e293b; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Inter', sans-serif; }
         
-        /* Video fills the entire window */
+        /* FULL WINDOW VIDEO: This makes the mirroring fill the laptop screen */
         #remote-video {
             position: fixed; top: 0; left: 0;
             width: 100vw; height: 100vh;
-            background: #000; object-fit: contain;
-            z-index: 1; display: none;
+            object-fit: contain; /* Ensures phone screen is fully visible without cropping */
+            z-index: 1; background: #000; display: none;
         }
 
-        .overlay {
-            position: relative; z-index: 10;
-            display: flex; align-items: center; justify-content: center;
-            height: 100%; width: 100%; background: rgba(15, 23, 42, 0.9);
+        .ui-panel {
+            position: relative; z-index: 10; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; height: 100vh;
+            background: var(--bg); color: white; transition: opacity 0.4s;
         }
 
-        .container {
-            background: var(--card); padding: 2.5rem; border-radius: 20px;
-            width: 90%; max-width: 400px; text-align: center;
-        }
-
-        input {
-            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155;
-            background: #0f172a; color: white; margin-bottom: 15px; box-sizing: border-box;
-        }
-
-        button {
-            background: var(--accent); color: #0f172a; border: none;
-            padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%;
-        }
-
-        #exit-btn {
-            position: fixed; top: 20px; right: 20px; z-index: 20;
-            background: rgba(255,255,255,0.2); color: white; border: none;
-            padding: 8px 15px; border-radius: 5px; display: none; cursor: pointer;
-        }
+        .card { background: var(--panel); padding: 30px; border-radius: 20px; width: 90%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); text-align: center; }
+        .id-box { background: #0f172a; border: 1px solid var(--accent); padding: 15px; border-radius: 10px; margin: 20px 0; cursor: pointer; }
+        .id-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; }
+        .id-value { font-size: 1.4rem; font-weight: bold; color: var(--accent); font-family: monospace; }
+        
+        input { width: 100%; padding: 14px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; text-align: center; font-size: 1rem; box-sizing: border-box; }
+        button { background: var(--accent); color: #0f172a; border: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; }
+        #status { margin-top: 15px; font-size: 0.8rem; color: #94a3b8; }
+        
+        #stop-btn { position: fixed; top: 20px; right: 20px; z-index: 20; background: rgba(255,0,0,0.6); color: white; padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; display: none; }
     </style>
 </head>
 <body>
 
-    <button id="exit-btn" onclick="location.reload()">Stop Mirroring</button>
+    <button id="stop-btn" onclick="location.reload()">Stop Mirroring</button>
 
-    <div id="ui-overlay" class="overlay">
-        <div class="container">
-            <h1 style="color:var(--accent)">WebMirror Pro</h1>
-            <p id="status">Ready</p>
-            <div style="background:#0f172a; padding:10px; border-radius:8px; margin-bottom:20px;">
-                <small style="color:#94a3b8">LAPTOP ID</small><br>
-                <strong id="my-id" style="font-size:1.2rem; cursor:pointer">Loading...</strong>
+    <div id="setup-ui" class="ui-panel">
+        <div class="card">
+            <h1 style="margin-top:0">WebMirror Pro</h1>
+            <p style="color:#94a3b8">Low-latency P2P screen sharing</p>
+            
+            <div class="id-box" onclick="copyMyId()">
+                <div class="id-label">This Window's ID</div>
+                <div id="my-id" class="id-value">Generating...</div>
+                <small style="color:#64748b">(Click to Copy)</small>
             </div>
-            <input type="text" id="remote-id" placeholder="Enter Laptop ID here">
-            <button onclick="startProMirror()">Connect & Stream</button>
+
+            <input type="text" id="remote-id" placeholder="Paste Remote ID here">
+            <button onclick="startSharing()">Start Sharing Screen</button>
+            <p id="status">Waiting for connection...</p>
         </div>
     </div>
 
     <video id="remote-video" autoplay playsinline></video>
 
     <script>
+        // Initialize Peer with no ID to generate a unique random one
         const peer = new Peer();
         const myIdEl = document.getElementById('my-id');
+        const statusEl = document.getElementById('status');
         const remoteVideo = document.getElementById('remote-video');
-        const uiOverlay = document.getElementById('ui-overlay');
+        const setupUI = document.getElementById('setup-ui');
+        const stopBtn = document.getElementById('stop-btn');
 
-        peer.on('open', id => myIdEl.innerText = id);
+        peer.on('open', id => {
+            myIdEl.innerText = id;
+            statusEl.innerText = "Signaling Server Connected.";
+        });
 
-        // Receive Stream (Laptop)
+        // RECEIVER LOGIC: Listen for calls
         peer.on('call', call => {
-            call.answer();
+            statusEl.innerText = "Incoming Stream detected...";
+            call.answer(); // Answer the call
             call.on('stream', stream => {
-                remoteVideo.srcObject = stream;
+                console.log("Stream received!");
+                setupUI.style.display = "none";
                 remoteVideo.style.display = "block";
-                uiOverlay.style.display = "none";
-                document.getElementById('exit-btn').style.display = "block";
+                stopBtn.style.display = "block";
+                remoteVideo.srcObject = stream;
             });
         });
 
-        async function startProMirror() {
-            const targetId = document.getElementById('remote-id').value;
-            if(!targetId) return alert("Enter ID");
+        // SENDER LOGIC: Start the broadcast
+        async function startSharing() {
+            const remoteId = document.getElementById('remote-id').value;
+            if(!remoteId) return alert("Please enter the ID of the receiver window!");
 
-            // Hacks for background stability
+            // STAY-ALIVE HACKS (For Phone/Mobile Backgrounding)
             try {
+                // 1. Silent Audio Loop
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain(); gain.gain.value = 0;
                 osc.connect(gain); gain.connect(ctx.destination); osc.start();
+                // 2. Wake Lock
                 if('wakeLock' in navigator) await navigator.wakeLock.request('screen');
-            } catch(e) {}
+            } catch(e) { console.log("Hacks skipped/unsupported"); }
 
-            let stream;
             try {
-                stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-            } catch(e) {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                // FORCE Screen Capture (System-wide)
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { 
+                        displaySurface: "monitor",
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                });
+
+                statusEl.innerText = "Calling " + remoteId + "...";
+                peer.call(remoteId, stream);
+                
+                // Show local preview (Optional - but helps you know it's working)
+                statusEl.innerText = "Screen mirroring active!";
+            } catch (err) {
+                console.error(err);
+                alert("Error: " + err.message + "\n\nIf on Phone, enable 'Experimental Web Platform features' in chrome://flags.");
             }
-            
-            if(stream) peer.call(targetId, stream);
         }
+
+        function copyMyId() {
+            navigator.clipboard.writeText(myIdEl.innerText);
+            alert("ID Copied! Paste this in the window you want to share FROM.");
+        }
+
+        peer.on('error', err => {
+            alert("Peer Error: " + err.type);
+            console.error(err);
+        });
     </script>
 </body>
 </html>
