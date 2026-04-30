@@ -16,14 +16,15 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Capacitor Sync
+      - name: Capacitor Fresh Build
         run: |
           mkdir -p www
           cp index.html www/
-          npx cap add android || true
+          # FORCE REBUILD: This ensures the new server.url is actually written
+          rm -rf android
+          npx cap add android
           npx cap sync
 
-      # NEW STEP: This forces the project to use Android 6.0 (API 23)
       - name: Patch SDK Version
         run: |
           sed -i 's/minSdkVersion = 22/minSdkVersion = 23/g' android/variables.gradle
