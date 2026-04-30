@@ -23,6 +23,12 @@ jobs:
           npx cap add android || true
           npx cap sync
 
+      # NEW STEP: This forces the project to use Android 6.0 (API 23)
+      - name: Patch SDK Version
+        run: |
+          sed -i 's/minSdkVersion = 22/minSdkVersion = 23/g' android/variables.gradle
+          sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/app/build.gradle || true
+
       - name: Build APK
         run: |
           cd android
