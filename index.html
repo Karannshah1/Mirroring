@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Mirror</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding: 20px; }
+        video { width: 90%; max-width: 800px; border: 2px solid #333; border-radius: 8px; margin-top: 20px; }
+        .controls { margin-bottom: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; border: none; color: white; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Web Mirror</h1>
+    <div class="controls">
+        <p id="my-id">Initializing...</p>
+        <input type="text" id="remote-id" placeholder="Enter Laptop ID (on mobile)">
+        <button onclick="startMirroring()">Start Mirroring</button>
+    </div>
+    <video id="remote-video" autoplay playsinline></video>
+
+    <script>
+        const peer = new Peer();
+        let myIdDisplay = document.getElementById('my-id');
+        let remoteVideo = document.getElementById('remote-video');
+
+        peer.on('open', (id) => {
+            myIdDisplay.innerText = "Your ID: " + id;
+        });
+
+        // RECEIVER LOGIC (Laptop)
+        peer.on('call', (call) => {
+            call.answer(); 
+            call.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+            });
+        });
+
+        // SENDER LOGIC (Mobile)
+        async function startMirroring() {
+            const targetId = document.getElementById('remote-id').value;
+            if (!targetId) return alert("Enter the Laptop's ID first!");
+
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: false
+                });
+                peer.call(targetId, stream);
+            } catch (err) {
+                console.error("Error accessing screen: ", err);
+            }
+        }
+    </script>
+</body>
+</html>
+
